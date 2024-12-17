@@ -108,72 +108,31 @@
     <!-- Mammoth.js library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
     <script>
-        async function checkLinks() {
-            const fileInput = document.getElementById('fileInput');
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '';
-
-            if (!fileInput.files.length) {
-                alert('Please upload a Word document.');
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const arrayBuffer = await file.arrayBuffer();
-
-            resultsDiv.innerHTML = '<p>Processing document...</p>';
-
-            // Parse the Word document using Mammoth.js
-            mammoth.extractRawText({ arrayBuffer: arrayBuffer })
-                .then(async (result) => {
-                    const links = extractLinks(result.value);
-                    if (links.length === 0) {
-                        resultsDiv.innerHTML = '<p>No links found in the document.</p>';
-                        return;
-                    }
-
-                    resultsDiv.innerHTML = '<h3>Checking Links...</h3>';
-
-                    for (const link of links) {
-                        const status = await isLinkAlive(link);
-                        const statusClass = status ? 'alive' : 'dead';
-                        const statusText = status ? 'Alive' : 'Dead';
-                        resultsDiv.innerHTML += `
-                            <div class="result-item ${statusClass}">
-                                ${link} - <strong>${statusText}</strong>
-                            </div>`;
-                    }
-                })
-                .catch(err => {
-                    console.error('Error reading file:', err);
-                    resultsDiv.innerHTML = '<p>Error processing the document.</p>';
-                });
-        }
-
-        // Extract links using regex
-        function extractLinks(text) {
-            const linkRegex = /(https?:\/\/[^\s]+)/g;
-            return text.match(linkRegex) || [];
-        }
-
-        // Check if a link is alive using fetch
         async function isLinkAlive(url) {
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 7000); // 7-second timeout
 
-                const response = await fetch(url, {
-                    method: 'GET',
-                    mode: 'no-cors',
-                    signal: controller.signal
-                });
+            // Retry mechanism
+            for (let i = 0; i < 2; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        signal: controller.signal,
+                        headers: { 'User-Agent': 'Mozilla/5.0' } // Mimic browser agent
+                    });
 
-                clearTimeout(timeoutId);
-                return true; // Assume alive if fetch doesn't throw an error
-            } catch (error) {
-                return false; // Link is dead
+                    clearTimeout(timeoutId);
+                    if (response.ok || response.type === 'opaque') return true; // Handle CORS or OK response
+                } catch (error) {
+                    if (i === 1) throw error; // Fail after second retry
+                }
             }
+        } catch (error) {
+            console.warn(`Link check failed for: ${url}`, error.message);
         }
+        return false;
+    }
     </script>
 </body>
 </html>
