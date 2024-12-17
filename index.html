@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Link Checker for Word Documents</title>
+</head>
+<body>
+    <h1>Upload Word Document to Check Links</h1>
+    <input type="file" id="fileInput" accept=".docx" />
+    <button onclick="checkLinks()">Check Links</button>
+    <div id="results"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
+    <script>
+        async function checkLinks() {
+            const fileInput = document.getElementById('fileInput');
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+
+            if (!fileInput.files.length) {
+                alert('Please upload a Word document.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+
+            // Parse the Word document
+            const arrayBuffer = await file.arrayBuffer();
+            mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+                .then(async (result) => {
+                    const links = extractLinks(result.value);
+                    if (links.length === 0) {
+                        resultsDiv.innerHTML = '<p>No links found in the document.</p>';
+                        return;
+                    }
+                    resultsDiv.innerHTML = '<h3>Checking Links...</h3>';
+
+                    // Check each link
+                    for (const link of links) {
+                        const status = await isLinkAlive(link);
+                        const color = status ? 'green' : 'red';
+                        resultsDiv.innerHTML += `<p style="color:${color}">${link} - ${status ? 'Alive' : 'Dead'}</p>`;
+                    }
+                })
+                .catch(err => {
+                    console.error('Error reading file:', err);
+                    resultsDiv.innerHTML = '<p>Error processing the document.</p>';
+                });
+        }
+
+        // Extract links from text using regex
+        function extractLinks(text) {
+            const linkRegex = /(https?:\/\/[^\s]+)/g;
+            return text.match(linkRegex) || [];
+        }
+
+        // Check if a link is alive using fetch
+        async function isLinkAlive(url) {
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                return response.ok;
+            } catch {
+                return false;
+            }
+        }
+    </script>
+</body>
+</html>
